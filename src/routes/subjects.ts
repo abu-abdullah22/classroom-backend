@@ -9,23 +9,25 @@ const router = express.Router();
 router.get("/", async (req, res) => {
   try {
     const { search, department, page = 1, limit = 10 } = req.query;
-    const currentPage = Math.max(1, +page);
-    const pageSize = Math.max(1, +limit);
-    const offset = (currentPage - 1) * pageSize;
+    const currentPage = Math.max(1, parseInt(String(page), 10) || 1);
+    const limitPerPage = Math.min(Math.max(1, parseInt(String(limit), 10) || 10), 100);
+    const offset = (currentPage - 1) * limitPerPage;
 
     const filterConditions = [];
     if (search) {
+      const searchPattern = `%${String(search).replace(/[%_]/g, '\\$&')}%`
       filterConditions.push(
         or(
-          ilike(subjects.name, `%${search}%`),
-          ilike(subjects.code, `%${search}%`),
-          ilike(subjects.description, `%${search}%`),
+          ilike(subjects.name, searchPattern),
+          ilike(subjects.code, searchPattern),
+          ilike(subjects.description, searchPattern),
         ),
       );
     }
 
     if (department) {
-      filterConditions.push(ilike(departments.name, `%${department}%`));
+      const deptPattern = `%${String(department).replace(/[%_]/g, '\\$&')}%`
+      filterConditions.push(ilike(departments.name, deptPattern));
     }
 
     // combine filter conditions with AND
@@ -49,16 +51,16 @@ router.get("/", async (req, res) => {
       .leftJoin(departments, eq(subjects.departmentId, departments.id))
       .where(whereClause)
       .orderBy(desc(subjects.createdAt))
-      .limit(pageSize)
+      .limit(limitPerPage)
       .offset(offset);
 
     res.status(200).json({
       data: subjectslist,
       pagination: {
         currentPage,
-        pageSize,
+        limitPerPage,
         totalCount,
-        totalPages: Math.ceil(totalCount / pageSize),
+        totalPages: Math.ceil(totalCount / limitPerPage),
       },
     });
   } catch (error) {
